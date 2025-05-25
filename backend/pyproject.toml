@@ -1,0 +1,28 @@
+# Tool configuration only - no package/build info needed
+[tool.mypy]
+strict = true
+exclude = ["venv", ".venv"]
+
+[tool.ruff]
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "F",     # pyflakes
+    "I",     # isort (import sorting)
+    "B",     # flake8-bugbear (common bugs)
+    "C4",    # flake8-comprehensions
+    "UP",    # pyupgrade (modern Python syntax)
+    "ARG001", # unused function arguments
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "B008",  # function calls in argument defaults
+    "W191",  # tabs in indentation
+    "B904",  # raise exceptions without from clause (for HTTPException)
+]
+
+[tool.ruff.lint.pyupgrade]
+keep-runtime-typing = true
