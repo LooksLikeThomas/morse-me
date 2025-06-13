@@ -1,5 +1,6 @@
-from sqlmodel import SQLModel, create_engine, Session
-from .config import settings
+from sqlmodel import SQLModel, create_engine
+
+from .config import settings  # type: ignore
 
 # Create database engine
 engine = create_engine(
@@ -8,11 +9,6 @@ engine = create_engine(
     pool_pre_ping=True,  # Verify connections before use
 )
 
-def create_db_and_tables():
+def create_db_and_tables() -> None:
     """Create all database tables"""
     SQLModel.metadata.create_all(engine)
-
-def get_session():
-    """Get database session for dependency injection"""
-    with Session(engine) as session:
-        yield session
