@@ -1,58 +1,111 @@
-from fastapi import APIRouter, HTTPException
-from sqlmodel import select, col
+# app/routes/user.py
+import uuid
 
-from ..dep import SessionDep, SearchQueryParams, SearchQueryParamsDep, SortOrder  # type: ignore
-from ..models import User, UsersPublic  # type: ignore
+import bcrypt
+from fastapi import APIRouter, HTTPException, Query
+from sqlmodel import func, select
+
+from ..dep import SessionDep
+from ..models import User, UserCreate, UserPublic, UsersPublic
 
 router = APIRouter(prefix="/users", tags=["users"])
 
-from sqlalchemy import func, asc, desc
+
+def hash_password(password: str) -> str:
+    """Hash a password using bcrypt"""
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
 
 
-@router.get(
-    "/",
-    response_model=UsersPublic,
-)
+@router.post("/", response_model=UserPublic, status_code=201)
+def create_user(user: UserCreate, session: SessionDep):
+    """Register a new user"""
+    # Check if callsign already exists
+    existing_user = session.exec(
+        select(User).where(User.callsign == user.callsign)
+    ).first()
+
+    if existing_user:
+        raise HTTPException(
+            status_code=400,
+            detail="Callsign already registered"
+        )
+
+    # Create new user with hashed password
+    db_user = User(
+        callsign=user.callsign,
+        hashed_password=hash_password(user.password)
+    )
+
+    session.add(db_user)
+    session.commit()
+    session.refresh(db_user)
+
+    return db_user
+
+
+@router.get("/", response_model=UsersPublic)
 def get_users(
-    session: SessionDep,
-    params: SearchQueryParamsDep,
+        session: SessionDep,
+        q: str | None = Query(None, description="Search query"),
+        limit: int = Query(100, gt=0, le=1000),
+        offset: int = Query(0, ge=0),
+        order: str = Query("desc", pattern="^(asc|desc)$")
 ):
-    """
-    Retrieve users.
-    """
+    """Get list of users with optional search and pagination"""
+    # Build query
+    query = select(User)
 
-    try:
-        # Base query
-        query = select(User)
+    # Add search filter if provided
+    if q:
+        query = query.where(User.callsign.contains(q))
 
-        # Apply search filter
-        if params.q:
-            query = query.where(col(User.callsign).ilike(f"%{params.q}%"))
+    # Get total count
+    count_query = select(func.count()).select_from(User)
+    if q:
+        count_query = count_query.where(User.callsign.contains(q))
+    total_count = session.exec(count_query).one()
 
-        # Get total count
-        count_query = select(func.count()).select_from(query.subquery())
-        total_count = session.exec(count_query).one()
+    # Add ordering
+    if order == "asc":
+        query = query.order_by(User.callsign.asc())
+    else:
+        query = query.order_by(User.callsign.desc())
 
-        # Order by query param, default to callsign
-        if params.order_by:
-            order_column = getattr(User, params.order_by, User.callsign)
-        else:
-            order_column = User.callsign
+    # Add pagination
+    query = query.offset(offset).limit(limit)
 
-        # Sort Order
-        if params.order == SortOrder.ASC:
-            query = query.order_by(asc(order_column))
-        else:
-            query = query.order_by(desc(order_column))
+    # Execute query
+    users = session.exec(query).all()
 
-        # Apply pagination
-        query = query.offset(params.offset)
-        query = query.limit(params.limit)
+    return UsersPublic(data=users, count=total_count)
 
-        # Exec Query
-        users = session.exec(query).all()
 
-        return UsersPublic(data=users, count=total_count)
+@router.get("/{user_id}", response_model=UserPublic)
+def get_user(user_id: uuid.UUID, session: SessionDep):
+    """Get user by ID"""
+    user = session.get(User, user_id)
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Error retrieving users")
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    return user
+
+
+@router.get("/callsign/{callsign}", response_model=UserPublic)
+def get_user_by_callsign(callsign: str, session: SessionDep):
+    """Get user by callsign"""
+    user = session.exec(
+        select(User).where(User.callsign == callsign)
+    ).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    return user

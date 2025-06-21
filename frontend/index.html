@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Morse-Me Präsentation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a1a;
+            color: #ffffff;
+            overflow: hidden;
+        }
+
+        .slide {
+            width: 100vw;
+            height: 100vh;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 60px;
+            position: relative;
+        }
+
+        .slide.active {
+            display: flex;
+        }
+
+        /* Slide 1 - Titel */
+        .slide1 {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            text-align: center;
+        }
+
+        .morse-title {
+            font-size: 5em;
+            font-weight: 700;
+            margin-bottom: 20px;
+            letter-spacing: -2px;
+        }
+
+        .morse-subtitle {
+            font-size: 1.8em;
+            font-weight: 300;
+            margin-bottom: 40px;
+            opacity: 0.9;
+        }
+
+        .morse-description {
+            font-size: 1.2em;
+            line-height: 1.6;
+            max-width: 800px;
+            opacity: 0.8;
+        }
+
+        .morse-pattern {
+            position: absolute;
+            bottom: 40px;
+            font-family: monospace;
+            font-size: 2em;
+            opacity: 0.3;
+            letter-spacing: 10px;
+        }
+
+        /* Slide 2 - Features & Tech */
+        .slide2 {
+            background: #1a1a1a;
+        }
+
+        .content-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 80px;
+            max-width: 1200px;
+            width: 100%;
+        }
+
+        .section-title {
+            font-size: 2.5em;
+            margin-bottom: 30px;
+            color: #4a90e2;
+        }
+
+        .feature-list, .tech-list {
+            list-style: none;
+        }
+
+        .feature-list li, .tech-list li {
+            font-size: 1.2em;
+            margin-bottom: 15px;
+            padding-left: 25px;
+            position: relative;
+            line-height: 1.5;
+        }
+
+        .feature-list li:before {
+            content: "•";
+            position: absolute;
+            left: 0;
+            color: #4a90e2;
+            font-weight: bold;
+            font-size: 1.5em;
+            line-height: 0.8;
+        }
+
+        .tech-list li:before {
+            content: "▸";
+            position: absolute;
+            left: 0;
+            color: #4a90e2;
+        }
+
+        .tech-stack {
+            background: rgba(74, 144, 226, 0.1);
+            padding: 30px;
+            border-radius: 10px;
+            border: 1px solid rgba(74, 144, 226, 0.3);
+        }
+
+        /* Navigation */
+        .nav-buttons {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            display: flex;
+            gap: 15px;
+            z-index: 100;
+        }
+
+        .nav-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: all 0.3s;
+        }
+
+        .nav-btn:hover {
+            background: rgba(74, 144, 226, 0.3);
+            border-color: #4a90e2;
+        }
+
+        .slide-indicator {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            transition: all 0.3s;
+        }
+
+        .dot.active {
+            background: #4a90e2;
+            width: 30px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Slide 1: Titel -->
+    <div class="slide slide1 active" id="slide1">
+        <h1 class="morse-title">Morse-Me</h1>
+        <p class="morse-subtitle">Learn Morse Code, One Friend at a Time!</p>
+        <p class="morse-description">
+            Verwandle Punkte und Striche in ein globales Erlebnis. Lerne neue Menschen kennen und chatte mit Freunden
+            auf der ganzen Welt mit echtem Morsecode. Egal ob Anfänger oder Fortgeschrittener – Morse-Me macht das
+            Lernen unterhaltsam, sozial und einzigartig.
+        </p>
+    </div>
+
+    <!-- Slide 2: Features & Tech Stack -->
+    <div class="slide slide2" id="slide2">
+        <div class="content-grid">
+            <div class="features-section">
+                <h2 class="section-title">Kernfunktionen</h2>
+                <ul class="feature-list">
+                    <li>Benutzerverwaltung mit Profilen</li>
+                    <li>Freundschaftssystem</li>
+                    <li>Morse-Code Kanäle mit Freunden</li>
+                    <li>Chat mit Zufallspersonen</li>
+                    <li>Lern- und Übungsmodus</li>
+                </ul>
+            </div>
+
+            <div class="tech-section">
+                <h2 class="section-title">Tech Stack</h2>
+                <div class="tech-stack">
+                    <ul class="tech-list">
+                        <li><strong>Frontend:</strong> React.js + Tailwind</li>
+                        <li><strong>Backend:</strong> FastAPI</li>
+                        <li><strong>Datenbank:</strong> MySQL mit SQLModel(ORM)</li>
+                        <li><strong>Authentifizierung:</strong> Firebase</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation -->
+    <div class="nav-buttons">
+        <button class="nav-btn" onclick="previousSlide()">Zurück</button>
+        <button class="nav-btn" onclick="nextSlide()">Weiter</button>
+    </div>
+
+    <!-- Slide Indicators -->
+    <div class="slide-indicator">
+        <div class="dot active" onclick="goToSlide(1)"></div>
+        <div class="dot" onclick="goToSlide(2)"></div>
+    </div>
+
+    <script>
+        let currentSlide = 1;
+        const totalSlides = 2;
+
+        function showSlide(n) {
+            const slides = document.querySelectorAll('.slide');
+            const dots = document.querySelectorAll('.dot');
+
+            if (n > totalSlides) currentSlide = 1;
+            if (n < 1) currentSlide = totalSlides;
+
+            slides.forEach(slide => slide.classList.remove('active'));
+            dots.forEach(dot => dot.classList.remove('active'));
+
+            document.getElementById(`slide${currentSlide}`).classList.add('active');
+            dots[currentSlide - 1].classList.add('active');
+        }
+
+        function nextSlide() {
+            currentSlide++;
+            showSlide(currentSlide);
+        }
+
+        function previousSlide() {
+            currentSlide--;
+            showSlide(currentSlide);
+        }
+
+        function goToSlide(n) {
+            currentSlide = n;
+            showSlide(currentSlide);
+        }
+
+        // Keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight') nextSlide();
+            if (e.key === 'ArrowLeft') previousSlide();
+        });
+    </script>
+</body>
+</html>

@@ -21,16 +21,26 @@ morse-me/
 │   │   ├── config.py         # Configuration and settings
 │   │   ├── db.py             # Database connection and session
 │   │   ├── models.py         # SQLModel database models
+│   │   ├── dep.py            # Dependencies for dependency injection
+│   │   ├── core/             # Core utilities
+│   │   │   ├── exceptions.py # Custom exception handlers
+│   │   │   └── response.py   # Custom response models
 │   │   └── routes/           # API route modules
-│   │       └── __init__.py
+│   │       ├── __init__.py
+│   │       └── user.py       # User management endpoints
+│   ├── tests/                # Test files
+│   │   ├── __init__.py
+│   │   ├── conftest.py       # Shared test configuration
+│   │   ├── test_main.py      # Main app tests
+│   │   └── test_users.py     # User endpoint tests
 │   ├── scripts/
 │   │   └── dev.sh            # Development startup script
-│   ├── requirements.txt      # Python dependencies
+│   ├── requirements.txt      # Python dependencies (includes test deps)
 │   ├── pyproject.toml        # Python project configuration
 │   └── BACKEND-README.md     # This file
 ├── frontend/                 # Frontend Project Folder
 │   └── ....
-├── .env                      # Shared Configuration file for BACKEND and FRONEND
+├── .env                      # Shared Configuration file for BACKEND and FRONTEND
 └── README.md                 # Main project README
 ```
 
@@ -89,7 +99,47 @@ uvicorn app.main:app --reload --port 8000
 
 Once running, the API is available at:
 - **API Base URL:** http://localhost:8000
-- **PLANNED: Interactive API Docs (Swagger):** http://localhost:8000/docs
+- **Interactive API Docs (Swagger):** http://localhost:8000/docs
+- **Alternative API Docs (ReDoc):** http://localhost:8000/redoc
+
+## Testing
+
+The backend includes comprehensive tests for all endpoints and functionality.
+
+### Running Tests
+
+```bash
+# Run all tests
+pytest
+
+# Run with verbose output
+pytest -v
+
+# Run specific test file
+pytest tests/test_users.py
+
+# Run tests with coverage report
+pytest --cov=app
+
+# Install coverage tool if needed
+pip install pytest-cov
+```
+
+### Test Structure
+
+- **`tests/conftest.py`** - Shared test fixtures and configuration
+- **`tests/test_main.py`** - Tests for main application endpoints
+- **`tests/test_users.py`** - Tests for user management endpoints
+
+### What's Tested
+
+- ✅ User registration and validation
+- ✅ User retrieval by ID and callsign
+- ✅ Search and pagination functionality
+- ✅ Password hashing security
+- ✅ Error handling and edge cases
+- ✅ Main application endpoints
+- ✅ Data integrity and constraints
 
 ## Environment Variables
 
@@ -116,12 +166,19 @@ BACKEND_DEVELOPMENT_MODE=true
 ## API Endpoints
 
 ### Current Endpoints
+
+#### Root & Health
 - `GET /` - Root endpoint, returns welcome message
-- `GET /docs` - Swagger UI documentation
+- `GET /health` - Health check endpoint
+
+#### User Management
+- `GET /users/` - List users with search and pagination
+- `GET /users/{user_id}` - Get user by ID
+- `GET /users/callsign/{callsign}` - Get user by callsign
+- `POST /users/` - Register new user
 
 ### Planned Endpoints
 - `/api/v1/auth/` - Authentication endpoints
-- `/api/v1/users/` - User management
 - `/api/v1/morse/` - Morse code functionality
 - `/api/v1/chat/` - Chat/messaging endpoints
 
@@ -135,26 +192,32 @@ BACKEND_DEVELOPMENT_MODE=true
 
 Example:
 ```python
-# app/routes/users.py
+# app/routes/morse.py
 from fastapi import APIRouter
 
-router = APIRouter(prefix="/users", tags=["users"])
+router = APIRouter(prefix="/morse", tags=["morse"])
 
 @router.get("/")
-async def get_users():
-    return {"users": []}
+async def get_morse_codes():
+    return {"codes": []}
+
+# In app/main.py
+from .routes import user, morse
+app.include_router(user.router)
+app.include_router(morse.router)
 ```
 
 ### Database Migrations
 
 Currently using SQLModel's `create_db_and_tables()` for simplicity. For production, consider using Alembic for migrations.
 
-### Testing
+### Testing New Features
 
-```bash
-# Run tests (when implemented)
-pytest
-```
+When adding new endpoints:
+1. Write tests in the appropriate `test_*.py` file
+2. Follow the existing test patterns
+3. Test both success and error cases
+4. Run tests to ensure they pass: `pytest`
 
 ## Troubleshooting
 
@@ -169,12 +232,18 @@ pytest
    - Ensure you're running from the `backend` directory
    - Check that virtual environment is activated
 
+3. **Test failures**
+   - Ensure all dependencies are installed: `pip install -r requirements.txt`
+   - Check that you're running tests from the backend directory
+   - Verify database connection (tests use SQLite in-memory database)
+
 ## Contributing
 
 1. Create a feature branch
 2. Make your changes
-3. Ensure all tests pass
-4. Submit a pull request
+3. Write tests for new functionality
+4. Ensure all tests pass: `pytest`
+5. Submit a pull request
 
 ## License
 

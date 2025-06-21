@@ -1,34 +1,29 @@
+# app/models.py
 import uuid
-from typing import Generic, TypeVar
+from datetime import datetime
 
-import fastapi.exceptions
 from sqlmodel import Field, SQLModel
 
-# Generic type variable
-DataT = TypeVar('DataT')
 
-class ApiResponse(SQLModel, Generic[DataT]):
-    """Unified API response model."""
-    data: DataT | None
-    error: str | None
-
-# Shared properties
+# User Models
 class UserBase(SQLModel):
-    callsign: str = Field(unique=True, index=True, max_length=255)
+    callsign: str = Field(unique=True, index=True, max_length=255, min_length=3)
 
-# Properties to receive via API on creation
+
 class UserCreate(UserBase):
-    password: str = Field(min_length=8, max_length=40)
+    password: str = Field(min_length=8, max_length=128)
 
 
-# Database model, database table inferred from class name
 class User(UserBase, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    hashed_password: str
+    hashed_password: str = Field(max_length=255)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
 
-# Properties to return via API, id is always required
+
 class UserPublic(UserBase):
     id: uuid.UUID
+    created_at: datetime
+
 
 class UsersPublic(SQLModel):
     data: list[UserPublic]
