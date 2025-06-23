@@ -1,20 +1,14 @@
-# main.py
+# app/main.py
 import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from fastapi.exceptions import RequestValidationError, HTTPException
-from pydantic_core import ValidationError
 from starlette.middleware.cors import CORSMiddleware
-from starlette.exceptions import HTTPException as StarletteHTTPException
-from starlette.requests import Request
-from starlette.types import HTTPExceptionHandler
-from starlette.responses import JSONResponse, Response
 
 from .config import settings
 from .db import create_db_and_tables
 # Import routes
-from .routes import user
+from .routes import user, auth, follow
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -52,6 +46,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(user.router)
+app.include_router(auth.router)
 
 @app.get("/")
 def read_root():

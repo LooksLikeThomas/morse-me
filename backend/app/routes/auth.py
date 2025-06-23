@@ -1,197 +1,118 @@
-# routes/auth.py
+# app/routes/auth.py
+from datetime import datetime, timedelta
+
+import bcrypt
+import jwt
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from jose import JWTError, jwt
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlmodel import select
-from datetime import timedelta
 
-from ..core.security import (
-    hash_password,
-    verify_password,
-    create_access_token,
-    SECRET_KEY,
-    ALGORITHM,
-    ACCESS_TOKEN_EXPIRE_MINUTES
-)
+from ..config import settings
 from ..dep import SessionDep
-from ..models import Token, User, UserLogin, UserPublic, UserWithToken
+from ..models import LoginRequest, TokenResponse, User, UserPublic
 
-router = APIRouter(prefix="/auth", tags=["authentication"])
+router = APIRouter(prefix="/auth", tags=["auth"])
 
 # Security
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
+security = HTTPBearer()
 
 
-def authenticate_user(session, callsign: str, password: str):
-    user = session.exec(
-        select(User).where(User.callsign == callsign)
-    ).first()
-
-    if not user:
-        return False
-    if not verify_password(password, user.hashed_password):
-        return False
-    return user
-
-
-async def get_current_user(
-        token: str = Depends(oauth2_scheme),
-        session: SessionDep = Depends()
-):
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
+# Helper functions
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verify a password against its hash"""
+    return bcrypt.checkpw(
+        plain_password.encode('utf-8'),
+        hashed_password.encode('utf-8')
     )
 
+
+def create_access_token(data: dict) -> str:
+    """Create a JWT token"""
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(minutes=settings.access_token_expire_minutes)
+    to_encode.update({"exp": expire})
+
+    return jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
+
+
+def decode_token(token: str) -> dict:
+    """Decode and validate a JWT token"""
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        callsign: str = payload.get("sub")
-        if callsign is None:
-            raise credentials_exception
-    except JWTError:
-        raise credentials_exception
+        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+        return payload
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has expired"
+        )
+    except jwt.InvalidTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token"
+        )
 
-    user = session.exec(
-        select(User).where(User.callsign == callsign)
-    ).first()
 
-    if user is None:
-        raise credentials_exception
+# Dependency to get current user
+async def get_current_user(
+        session: SessionDep,
+        credentials: HTTPAuthorizationCredentials = Depends(security)
+) -> User:
+    """Get the current authenticated user"""
+    token = credentials.credentials
+    payload = decode_token(token)
+
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token payload"
+        )
+
+    # Convert string to UUID
+    from uuid import UUID
+    try:
+        user_uuid = UUID(user_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid user ID format"
+        )
+
+    user = session.get(User, user_uuid)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found"
+        )
+
     return user
 
 
-async def get_current_active_user(
-        current_user: User = Depends(get_current_user)
-):
-    if not current_user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Inactive user"
-        )
-    return current_user
+# Routes
+@router.post("/login", response_model=TokenResponse)
+def login(login_data: LoginRequest, session: SessionDep):
+    """Login with callsign and password"""
+    # Find user by callsign
+    user = session.exec(
+        select(User).where(User.callsign == login_data.callsign)
+    ).first()
 
-
-@router.post(
-    "/login",
-    response_model=UserWithToken,
-    summary="Login user",
-    description="Authenticate user and return access token"
-)
-def login(
-        form_data: OAuth2PasswordRequestForm = Depends(),
-        session: SessionDep = Depends(),
-):
-    """
-    Login endpoint that accepts username/password and returns JWT token.
-    """
-    user = authenticate_user(session, form_data.username, form_data.password)
-    if not user:
+    if not user or not verify_password(login_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect callsign or password"
         )
 
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is deactivated"
-        )
+    # Create token with user ID as subject
+    access_token = create_access_token(data={"sub": str(user.id)})
 
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": user.callsign}, expires_delta=access_token_expires
-    )
-
-    token = Token(
+    return TokenResponse(
         access_token=access_token,
-        token_type="bearer",
-        expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60
-    )
-
-    return UserWithToken(
-        user=UserPublic.model_validate(user),
-        token=token
+        user=UserPublic.model_validate(user)
     )
 
 
-@router.post(
-    "/login-json",
-    response_model=UserWithToken,
-    summary="Login user (JSON)",
-    description="Authenticate user with JSON payload and return access token"
-)
-def login_json(
-        user_login: UserLogin,
-        session: SessionDep = Depends(),
-):
-    """
-    Alternative login endpoint that accepts JSON payload.
-    """
-    user = authenticate_user(session, user_login.callsign, user_login.password)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect callsign or password"
-        )
-
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is deactivated"
-        )
-
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": user.callsign}, expires_delta=access_token_expires
-    )
-
-    token = Token(
-        access_token=access_token,
-        token_type="bearer",
-        expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60
-    )
-
-    return UserWithToken(
-        user=UserPublic.model_validate(user),
-        token=token
-    )
-
-
-@router.get(
-    "/me",
-    response_model=UserPublic,
-    summary="Get current user",
-    description="Get information about the currently authenticated user"
-)
-def get_current_user_info(
-        current_user: User = Depends(get_current_active_user)
-):
-    """
-    Get current authenticated user information.
-    """
+@router.get("/me", response_model=UserPublic)
+async def get_me(current_user: User = Depends(get_current_user)):
+    """Get current user info"""
     return current_user
-
-
-@router.post(
-    "/refresh",
-    response_model=Token,
-    summary="Refresh token",
-    description="Refresh an existing access token"
-)
-def refresh_token(
-        current_user: User = Depends(get_current_active_user)
-):
-    """
-    Refresh access token for current user.
-    """
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": current_user.callsign}, expires_delta=access_token_expires
-    )
-
-    return Token(
-        access_token=access_token,
-        token_type="bearer",
-        expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60
-    )
