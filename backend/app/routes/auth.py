@@ -9,7 +9,7 @@ from sqlmodel import select
 
 from ..config import settings
 from ..dep import SessionDep
-from ..models import LoginRequest, TokenResponse, User, UserPublic
+from ..models import LoginRequest, TokenResponse, User, UserPublic, UserPublicFlat
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -108,7 +108,7 @@ def login(login_data: LoginRequest, session: SessionDep):
 
     return TokenResponse(
         access_token=access_token,
-        user=UserPublic.model_validate(user)
+        user=UserPublicFlat.model_validate(user)
     )
 
 
