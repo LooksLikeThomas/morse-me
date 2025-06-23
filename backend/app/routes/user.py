@@ -1,12 +1,19 @@
 # app/routes/user.py
 import uuid
+from typing import List
 
 import bcrypt
 from fastapi import APIRouter, HTTPException, Query
 from sqlmodel import func, select
 
 from ..dep import SessionDep
-from ..models import User, UserCreate, UserPublic, UsersPublic
+from ..models import (
+    User,
+    UserCreate,
+    UserPublic,
+    UserPublicWithChannel,
+    UserPublicDetailed,
+)
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -44,7 +51,7 @@ def create_user(user: UserCreate, session: SessionDep):
     return db_user
 
 
-@router.get("/", response_model=UsersPublic)
+@router.get("/", response_model=List[UserPublic])
 def get_users(
         session: SessionDep,
         q: str | None = Query(None, description="Search query"),
@@ -78,10 +85,10 @@ def get_users(
     # Execute query
     users = session.exec(query).all()
 
-    return UsersPublic(data=users, count=total_count)
+    return users
 
 
-@router.get("/{user_id}", response_model=UserPublic)
+@router.get("/{user_id}", response_model=UserPublicDetailed)
 def get_user(user_id: uuid.UUID, session: SessionDep):
     """Get user by ID"""
     user = session.get(User, user_id)
@@ -95,7 +102,7 @@ def get_user(user_id: uuid.UUID, session: SessionDep):
     return user
 
 
-@router.get("/callsign/{callsign}", response_model=UserPublic)
+@router.get("/callsign/{callsign}", response_model=UserPublicDetailed)
 def get_user_by_callsign(callsign: str, session: SessionDep):
     """Get user by callsign"""
     user = session.exec(

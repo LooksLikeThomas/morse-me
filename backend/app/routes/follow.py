@@ -1,27 +1,27 @@
 # app/routes/follow.py
 import uuid
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status, Response
 
-from ..dep import SessionDep
-from ..models import Follow, User, UsersPublic, UserPublic
-from .auth import get_current_user
+from ..dep import SessionDep, CurrentUser
+from ..models import Follow, User, UserPublic
 
 router = APIRouter(prefix="/follow", tags=["follow"])
 
 
 @router.get(
     "/",
-    response_model=UsersPublic,
+    response_model=List[UserPublic],
     status_code=status.HTTP_200_OK
 )
 async def get_follows(
         session: SessionDep,
-        current_user: User = Depends(get_current_user)
+        current_user: CurrentUser
 ):
     """Get all users that current user follows"""
     user = session.get(User, current_user.id)
-    return UsersPublic(data=user.follows, count=len(user.follows))
+    return user.follows
 
 
 @router.post(
@@ -33,7 +33,7 @@ async def follow_user(
         target_user_id: uuid.UUID,
         session: SessionDep,
         response: Response,
-        current_user: User = Depends(get_current_user),
+        current_user: CurrentUser,
 ):
     """Follow a user by id"""
 
@@ -74,7 +74,7 @@ async def follow_user(
 async def unfollow_user(
         target_user_id: uuid.UUID,
         session: SessionDep,
-        current_user: User = Depends(get_current_user)
+        current_user: CurrentUser
 ):
     """Unfollow a user by id"""
     # Find target user

@@ -1,16 +1,18 @@
-# app/routes/auth.py
-from datetime import datetime, timedelta
+# app/core/auth.py
+import datetime
+from uuid import UUID
 
 import bcrypt
-import jwt
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlmodel import select
+from sqlmodel import Session, select
+from starlette.websockets import WebSocket
 
-from ..config import settings
-from ..dep import SessionDep
-from ..models import LoginRequest, TokenResponse, User, UserPublic, UserPublicFlat
+from ..db import get_db_session
+from ..models import LoginRequest, TokenResponse, User, UserPublic
+from .security import create_access_token, decode_token
 
+# Create router for auth endpoints
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 # Security
@@ -26,35 +28,9 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     )
 
 
-def create_access_token(data: dict) -> str:
-    """Create a JWT token"""
-    to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(minutes=settings.access_token_expire_minutes)
-    to_encode.update({"exp": expire})
-
-    return jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
-
-
-def decode_token(token: str) -> dict:
-    """Decode and validate a JWT token"""
-    try:
-        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
-        return payload
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token has expired"
-        )
-    except jwt.InvalidTokenError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token"
-        )
-
-
 # Dependency to get current user
 async def get_current_user(
-        session: SessionDep,
+        session: Session = Depends(get_db_session),
         credentials: HTTPAuthorizationCredentials = Depends(security)
 ) -> User:
     """Get the current authenticated user"""
@@ -69,7 +45,6 @@ async def get_current_user(
         )
 
     # Convert string to UUID
-    from uuid import UUID
     try:
         user_uuid = UUID(user_id)
     except ValueError:
@@ -85,12 +60,62 @@ async def get_current_user(
             detail="User not found"
         )
 
+    # Update last_seen timestamp
+    user.last_seen = datetime.datetime.utcnow()
+    session.add(user)
+    session.commit()
+
     return user
 
 
-# Routes
+async def get_current_user_from_ws(
+        websocket: WebSocket,
+        session: Session = Depends(get_db_session),
+        token: str | None = Query(None)
+) -> User | None:
+    """
+    Dependency to get the current user from a WebSocket connection.
+    Reads the token from query parameters.
+    """
+    if token is None:
+        # 1008: Policy Violation
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Missing token")
+        return None
+
+    try:
+        payload = decode_token(token)
+    except HTTPException:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token")
+        return None
+
+    user_id = payload.get("sub")
+
+    if not user_id:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token payload")
+        return None
+
+    try:
+        user_uuid = UUID(user_id)
+    except ValueError:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid user ID format")
+        return None
+
+    user = session.get(User, user_uuid)
+    if not user:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="User not found")
+        return None
+
+    # Update last_seen timestamp
+    user.last_seen = datetime.datetime.utcnow()
+    session.add(user)
+    session.commit()
+
+    return user
+
+
+# Auth Routes
 @router.post("/login", response_model=TokenResponse)
-def login(login_data: LoginRequest, session: SessionDep):
+def login(login_data: LoginRequest, session: Session = Depends(get_db_session)):
     """Login with callsign and password"""
     # Find user by callsign
     user = session.exec(
@@ -108,7 +133,7 @@ def login(login_data: LoginRequest, session: SessionDep):
 
     return TokenResponse(
         access_token=access_token,
-        user=UserPublicFlat.model_validate(user)
+        user=UserPublic.model_validate(user)
     )
 
 

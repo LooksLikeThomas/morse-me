@@ -8,7 +8,7 @@ from starlette.middleware.cors import CORSMiddleware
 from .config import settings
 from .db import create_db_and_tables
 # Import routes
-from .routes import user, auth, follow
+from .routes import user, follow, login, channel
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -46,7 +46,9 @@ app.add_middleware(
 
 # Include routers
 app.include_router(user.router)
-app.include_router(auth.router)
+app.include_router(login.router)
+app.include_router(follow.router)
+app.include_router(channel.router)
 
 app.include_router(follow.router)
 
