@@ -18,5 +18,6 @@ React-App frontend for the Morse-Me application - Learn Morse Code, One Friend a
 ### Installation
 
     1. Open project and terminal
-    2. Run `npm install`
-    3. Run `npm start`to start the application
+    2. Go to `cd .\frontend\app\`
+    3. Run `npm install`
+    4. Run `npm start`to start the application
