@@ -74,21 +74,12 @@ morse-me/
 
 ### Running the Development Server
 
-#### Option 1: Using the dev script (Recommended)
+#### Manual startup
+Setting up the Database with Docker
 ```bash
-# Make the script executable (first time only)
-chmod +x scripts/dev.sh
-
-# Run the development server (includes PostgreSQL in Docker)
-./scripts/dev.sh
+docker run -d --name morse-postgres -e POSTGRES_USER=morse_user -e POSTGRES_PASSWORD=morse_password -e POSTGRES_DB=morse_me_db -p 5432:5432 postgres:latest
 ```
 
-This script will:
-- Start a PostgreSQL container (if Docker is available)
-- Wait for the database to be ready
-- Start the FastAPI server with auto-reload
-
-#### Option 2: Manual startup
 ```bash
 # Ensure PostgreSQL is running on localhost:5432
 # Then start the server from the /backend directory:
