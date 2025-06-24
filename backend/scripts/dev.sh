@@ -56,9 +56,6 @@ echo "API docs will be available at http://localhost:$BACKEND_APP_PORT/docs"
 echo "Press Ctrl+C to stop both services"
 echo ""
 
-
-#!/bin/bash
-
 # Get the directory where this script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
@@ -67,6 +64,13 @@ BACKEND_DIR="$(dirname "$SCRIPT_DIR")"
 
 # Change to the backend directory
 cd "$BACKEND_DIR"
+
+# Option C: Keep simple uvicorn but run initial checks
+echo "Running initial code quality checks..."
+ruff check . --quiet || echo "Ruff found issues"
+mypy . --no-error-summary || echo "MyPy found type issues"
+echo "Starting uvicorn (checks will run on each reload via app startup)..."
+
 
 # Start uvicorn (we're already in backend directory)
 uvicorn app.main:app --reload --port $BACKEND_APP_PORT
