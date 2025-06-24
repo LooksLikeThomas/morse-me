@@ -109,6 +109,7 @@ async def get_current_user_from_ws(
     user.last_seen = datetime.datetime.utcnow()
     session.add(user)
     session.commit()
+    session.refresh(user)  # Important: refresh to get updated data
 
     return user
 

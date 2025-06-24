@@ -1,19 +1,24 @@
 # app/core/channel.py
 import json
+import logging
 from datetime import datetime
-from typing import Union
+from typing import Union, List
 
+from anyio import ClosedResourceError
 from pydantic import BaseModel, Field, ConfigDict
+from pydantic.dataclasses import dataclass
 
 from ..models import ChannelPublic, UserPublic, User
 from .connection import MorseConnection
 
+logger = logging.getLogger('uvicorn.error')
 
-class Channel(BaseModel):
+@dataclass(config=ConfigDict(arbitrary_types_allowed=True))
+class Channel:
     channel_id: str = Field(pattern=r'^\d{6}$')  # Validates 6-digit string
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    user_connections: list[MorseConnection] = Field(default_factory=list, max_length=2)
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    user_connections: List[MorseConnection] = Field(default_factory=list, max_length=2)
+
 
     def __contains__(self, user_or_connection: Union[User, MorseConnection]) -> bool:
         if isinstance(user_or_connection, User):
@@ -59,16 +64,17 @@ class Channel(BaseModel):
         for user_connection in self.user_connections:
             try:
                 await user_connection.websocket.send_json(message)
+            except ClosedResourceError as _:
+                continue
             except Exception as e:
-                print(
-                    f"Failed to send message to {user_connection.user.callsign}: {e}"
-                )
+                logger.error(f"Failed to send message to {user_connection.user.callsign}: {type(e).__name__}: {e}")
 
     async def relay_message(self, message: str, sender: MorseConnection):
         """Relay a message from one user to another"""
         dest_user_connection = self.get_other_connection(sender)
 
         if not dest_user_connection:
+            logger.debug(f"No other user to relay message to in channel {self.channel_id}")
             return
 
         try:
@@ -76,11 +82,13 @@ class Channel(BaseModel):
             try:
                 parsed_message = json.loads(message)
                 await dest_user_connection.websocket.send_json(parsed_message)
+                logger.debug(f"Relayed JSON message in channel {self.channel_id}")
             except json.JSONDecodeError:
                 # If it's not JSON, send as text
                 await dest_user_connection.websocket.send_text(message)
+                logger.debug(f"Relayed text message in channel {self.channel_id}")
         except Exception as e:
-            print(f"Failed to relay message to {dest_user_connection.user.callsign}: {e}")
+            logger.error(f"Failed to relay message to {dest_user_connection.user.callsign}: {type(e).__name__}: {e}")
 
     def to_public(self) -> ChannelPublic:
         """Convert to public representation"""

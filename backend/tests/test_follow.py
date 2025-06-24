@@ -127,12 +127,12 @@ class TestFollowUser:
 
         # Check User1's follows
         response = client.get("/follow/", headers=auth_headers_user1)
-        assert response.json()["count"] == 1
-        assert response.json()["data"][0]["callsign"] == "FOLLOWER2"
+        assert len(response.json()) == 1
+        assert response.json()[0]["callsign"] == "FOLLOWER2"
 
         # Check User2's follows (should be empty)
         response = client.get("/follow/", headers=auth_headers_user2)
-        assert response.json()["count"] == 0
+        assert len(response.json()) == 0
 
 
 class TestGetFollows:
@@ -144,8 +144,7 @@ class TestGetFollows:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["data"] == []
-        assert data["count"] == 0
+        assert data == []
 
     def test_get_follows_list(self, client: TestClient, user1, user2, user3, auth_headers_user1):
         """Test getting list of followed users"""
@@ -157,13 +156,13 @@ class TestGetFollows:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["count"] == 2
+        assert len(data) == 2
 
-        callsigns = [user["callsign"] for user in data["data"]]
+        callsigns = [user["callsign"] for user in data]
         assert "FOLLOWER2" in callsigns
         assert "FOLLOWER3" in callsigns
 
-    def test_follows_response_structure(self, client: TestClient, user1, user2, user3, auth_headers_user1, session):
+    def test_follows_response_structure(self, client: TestClient, user1, user2, user3, auth_headers_user1, auth_headers_user2, session):
         """Test the structure of follows response with nested data"""
         # Create a follow chain: User1 -> User2 -> User3
         client.post(f"/follow/{user2.id}/", headers=auth_headers_user1)
@@ -177,17 +176,21 @@ class TestGetFollows:
         data = response.json()
 
         # Check structure
-        assert data["count"] == 1
-        user2_data = data["data"][0]
+        assert len(data) == 1
+        user2_data = data[0]
         assert user2_data["callsign"] == "FOLLOWER2"
         assert "id" in user2_data
         assert "created_at" in user2_data
-        assert "follows" in user2_data
-        assert "followers" in user2_data
 
-        # User2 follows should include User3
-        assert len(user2_data["follows"]) == 1
-        assert user2_data["follows"][0]["callsign"] == "FOLLOWER3"
+        response2 = client.get("/follow/", headers=auth_headers_user2)
+        data2 = response2.json()
+
+        # Check structure
+        assert len(data2) == 1
+        user3_data = data2[0]
+        assert user3_data["callsign"] == "FOLLOWER3"
+        assert "id" in user3_data
+        assert "created_at" in user3_data
 
 
 class TestUnfollowUser:
@@ -208,7 +211,7 @@ class TestUnfollowUser:
 
         # Verify unfollowed
         response = client.get("/follow/", headers=auth_headers_user1)
-        assert response.json()["count"] == 0
+        assert len(response.json()) == 0
 
     def test_cannot_unfollow_not_followed(self, client: TestClient, user1, user2, auth_headers_user1):
         """Test unfollowing a user that isn't followed"""

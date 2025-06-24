@@ -87,8 +87,8 @@ class TestGetUsers:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["count"] == 0
-        assert data["data"] == []
+        assert len(data) == 0
+        assert data == []
 
     def test_get_users_with_data(self, client: TestClient, created_user):
         """Test getting users when data exists"""
@@ -96,9 +96,9 @@ class TestGetUsers:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["count"] == 1
-        assert len(data["data"]) == 1
-        assert data["data"][0]["callsign"] == created_user.callsign
+        assert len(data) == 1
+        assert len(data) == 1
+        assert data[0]["callsign"] == created_user.callsign
 
     def test_get_users_with_search(self, client: TestClient, session: Session):
         """Test searching users"""
@@ -116,15 +116,15 @@ class TestGetUsers:
         response = client.get("/users/?q=ALPHA")
         assert response.status_code == 200
         data = response.json()
-        assert data["count"] == 1
-        assert data["data"][0]["callsign"] == "ALPHA123"
+        assert len(data) == 1
+        assert data[0]["callsign"] == "ALPHA123"
 
         # Search for users containing "A" (should match ALPHA, BETA, and GAMMA - all have 'A')
         response = client.get("/users/?q=A")
         assert response.status_code == 200
         data = response.json()
-        assert data["count"] == 3  # All three users have 'A' in their callsign
-        callsigns = [user["callsign"] for user in data["data"]]
+        assert len(data) == 3  # All three users have 'A' in their callsign
+        callsigns = [user["callsign"] for user in data]
         assert "ALPHA123" in callsigns
         assert "BETA456" in callsigns
         assert "GAMMA789" in callsigns
@@ -144,15 +144,13 @@ class TestGetUsers:
         response = client.get("/users/?limit=3")
         assert response.status_code == 200
         data = response.json()
-        assert data["count"] == 5
-        assert len(data["data"]) == 3
+        assert len(data) == 3
 
         # Test offset
         response = client.get("/users/?offset=2&limit=2")
         assert response.status_code == 200
         data = response.json()
-        assert data["count"] == 5
-        assert len(data["data"]) == 2
+        assert len(data) == 2
 
     def test_get_users_ordering(self, client: TestClient, session: Session):
         """Test user ordering"""
@@ -170,14 +168,14 @@ class TestGetUsers:
         response = client.get("/users/?order=asc")
         assert response.status_code == 200
         data = response.json()
-        callsigns = [user["callsign"] for user in data["data"]]
+        callsigns = [user["callsign"] for user in data]
         assert callsigns == ["ALPHA", "BETA", "CHARLIE"]
 
         # Test descending order (default)
         response = client.get("/users/?order=desc")
         assert response.status_code == 200
         data = response.json()
-        callsigns = [user["callsign"] for user in data["data"]]
+        callsigns = [user["callsign"] for user in data]
         assert callsigns == ["CHARLIE", "BETA", "ALPHA"]
 
 
