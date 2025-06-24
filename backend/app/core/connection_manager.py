@@ -27,10 +27,11 @@ class ConnectionManager:
     @property
     def active_users(self) -> list[User]:
         """Returns a list of all currently connected users."""
-        users: set[User] = set()
+        users_by_id: dict[uuid.UUID, User] = {}
         for channel in self.channels.values():
-            users.update(channel.users)
-        return list(users)
+            for user in channel.users:
+                users_by_id[user.id] = user
+        return list(users_by_id.values())
 
     def get_user_channel(self, user_id: Union[uuid.UUID, str]) -> Channel | None:
         """Get the channel a user is currently in"""

@@ -6,6 +6,7 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session
+from starlette.websockets import WebSocketDisconnect
 
 from app.core.connection_manager import manager as real_manager
 from app.models import User
@@ -154,23 +155,33 @@ class TestWebSocketChannels:
 
     def test_join_channel_missing_token(self, client: TestClient):
         """Test joining channel without token"""
-        with client.websocket_connect("/channel/123456") as websocket:
-            # Should be closed immediately
-            with pytest.raises(Exception):
-                websocket.receive_json()
+        with pytest.raises(WebSocketDisconnect) as exc_info:
+            with client.websocket_connect("/channel/123456") as websocket:
+                # Connection should be rejected
+                pass
+
+        assert exc_info.value.code == 1008  # Policy Violation
+        assert "Missing token" in exc_info.value.reason
 
     def test_join_channel_invalid_token(self, client: TestClient):
         """Test joining channel with invalid token"""
-        with pytest.raises(Exception):
+        with pytest.raises(WebSocketDisconnect) as exc_info:
             with client.websocket_connect("/channel/123456?token=invalid-token") as websocket:
-                websocket.receive_json()
+                pass
+
+        assert exc_info.value.code == 1008  # Policy Violation
+        assert "Invalid token" in exc_info.value.reason
 
     def test_join_channel_invalid_channel_id(self, client: TestClient, auth_token1):
         """Test joining channel with invalid ID format"""
-        with pytest.raises(Exception):
+        with pytest.raises(WebSocketDisconnect) as exc_info:
             with client.websocket_connect(f"/channel/ABC123?token={auth_token1}") as websocket:
-                websocket.receive_json()
+                pass
 
+        assert exc_info.value.code == 1008
+        assert "6-digit number" in exc_info.value.reason
+
+    @pytest.mark.timeout(5)  # Add timeout to prevent hanging
     def test_join_channel_success(self, client: TestClient, auth_token1, user1):
         """Test successfully joining a channel"""
         channel_id = "123456"
@@ -182,7 +193,8 @@ class TestWebSocketChannels:
             assert data["user"]["callsign"] == user1.callsign
             assert data["channel_id"] == channel_id
 
-    def test_join_channel_full(self, client: TestClient, auth_token1, auth_token2, user1, user2):
+    @pytest.mark.timeout(10)
+    def test_join_channel_full(self, client: TestClient, auth_token1, auth_token2, user1, user2, session: Session):
         """Test joining a full channel"""
         channel_id = "123456"
 
@@ -191,15 +203,16 @@ class TestWebSocketChannels:
             ws1.receive_json()  # user_joined event
 
             with client.websocket_connect(f"/channel/{channel_id}?token={auth_token2}") as ws2:
-                ws2.receive_json()  # user_joined event
+                ws2.receive_json()  # user_joined event for user2
+                ws1.receive_json()  # user_joined event for user2 on ws1
 
-                # Third user tries to join
+                # Create third user
                 user3 = User(
                     callsign="CHANNEL3",
                     hashed_password=hash_password("password123")
                 )
-                client.app.state.db.add(user3)
-                client.app.state.db.commit()
+                session.add(user3)
+                session.commit()
 
                 response = client.post("/auth/login", json={
                     "callsign": "CHANNEL3",
@@ -208,10 +221,14 @@ class TestWebSocketChannels:
                 token3 = response.json()["access_token"]
 
                 # Should fail to connect
-                with pytest.raises(Exception):
+                with pytest.raises(WebSocketDisconnect) as exc_info:
                     with client.websocket_connect(f"/channel/{channel_id}?token={token3}") as ws3:
-                        ws3.receive_json()
+                        pass
 
+                assert exc_info.value.code == 1008
+                assert "Channel is full" in exc_info.value.reason
+
+    @pytest.mark.timeout(10)
     def test_message_relay(self, client: TestClient, auth_token1, auth_token2):
         """Test message relay between users"""
         channel_id = "123456"
@@ -240,6 +257,7 @@ class TestWebSocketChannels:
                 received = ws1.receive_json()
                 assert received == morse_message2
 
+    @pytest.mark.timeout(10)
     def test_user_disconnect_notification(self, client: TestClient, auth_token1, auth_token2, user1):
         """Test that remaining user is notified when partner disconnects"""
         channel_id = "123456"
@@ -260,6 +278,7 @@ class TestWebSocketChannels:
                 assert data["event"] == "user_left"
                 assert data["user"]["callsign"] == user1.callsign
 
+    @pytest.mark.timeout(5)
     def test_join_random_channel_creates_new(self, client: TestClient, auth_token1):
         """Test joining random channel when none exist"""
         with client.websocket_connect(f"/channel/random?token={auth_token1}") as ws:
@@ -270,6 +289,7 @@ class TestWebSocketChannels:
             assert len(data["channel_id"]) == 6
             assert data["channel_id"].isdigit()
 
+    @pytest.mark.timeout(10)
     def test_join_random_channel_joins_waiting(self, client: TestClient, auth_token1, auth_token2, user1, user2):
         """Test joining random channel finds waiting user"""
         # First user creates a channel by joining random
@@ -289,6 +309,7 @@ class TestWebSocketChannels:
                 assert notification["event"] == "user_joined"
                 assert notification["user"]["callsign"] == user2.callsign
 
+    @pytest.mark.timeout(10)
     def test_user_already_in_channel(self, client: TestClient, auth_token1):
         """Test user cannot join multiple channels"""
         channel_id1 = "123456"
@@ -299,10 +320,14 @@ class TestWebSocketChannels:
             ws1.receive_json()  # user_joined event
 
             # Try to join second channel with same user
-            with pytest.raises(Exception):
+            with pytest.raises(WebSocketDisconnect) as exc_info:
                 with client.websocket_connect(f"/channel/{channel_id2}?token={auth_token1}") as ws2:
-                    ws2.receive_json()
+                    pass
 
+            assert exc_info.value.code == 1008
+            assert "already in a channel" in exc_info.value.reason
+
+    @pytest.mark.timeout(10)
     def test_plain_text_message_relay(self, client: TestClient, auth_token1, auth_token2):
         """Test relaying plain text (non-JSON) messages"""
         channel_id = "123456"

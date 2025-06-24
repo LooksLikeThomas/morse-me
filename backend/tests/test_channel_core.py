@@ -1,5 +1,6 @@
 # tests/test_channel_core.py
 import json
+import uuid
 from datetime import datetime
 from unittest.mock import AsyncMock
 
@@ -14,7 +15,7 @@ from app.models import ChannelPublic, User
 def mock_user1():
     """Create a mock user 1"""
     return User(
-        id="123e4567-e89b-12d3-a456-426614174000",
+        id=uuid.UUID("123e4567-e89b-12d3-a456-426614174000"),
         callsign="USER1",
         hashed_password="hashed",
         created_at=datetime.utcnow(),
@@ -26,7 +27,7 @@ def mock_user1():
 def mock_user2():
     """Create a mock user 2"""
     return User(
-        id="223e4567-e89b-12d3-a456-426614174000",
+        id=uuid.UUID("223e4567-e89b-12d3-a456-426614174000"),
         callsign="USER2",
         hashed_password="hashed",
         created_at=datetime.utcnow(),

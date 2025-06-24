@@ -1,10 +1,9 @@
 # app/main.py
 import logging
 from contextlib import asynccontextmanager
-from select import select
 
 from fastapi import FastAPI
-from sqlmodel import Session
+from sqlmodel import Session, select
 from starlette.middleware.cors import CORSMiddleware
 
 from .config import settings
@@ -21,7 +20,7 @@ def create_default_admin():
     try:
         with Session(engine) as session:
             # Check if admin user already exists
-            existing_admin = session.query(User).filter(User.callsign == "admin").first()
+            existing_admin = session.exec(select(User).where(User.callsign == "admin")).first()
 
             if existing_admin:
                 logger.info("Admin user already exists")
