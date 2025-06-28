@@ -23,6 +23,12 @@ interface ChannelInvitation {
     channelId: string;
 }
 
+interface MorseSignal {
+    signal: string;
+    type: 'sent' | 'received';
+    timestamp: number;
+}
+
 export interface MorseChatRef {
     joinChannel: (channelId: string) => Promise<void>;
     disconnect: () => void;
@@ -42,7 +48,7 @@ const EnhancedMorseChat = forwardRef<MorseChatRef, EnhancedMorseChatProps>(({
                                                                             }, ref) => {
     const [isSending, setIsSending] = useState(false);
     const [isReceiving, setIsReceiving] = useState(false);
-    const [morseOutput, setMorseOutput] = useState('');
+    const [morseSignals, setMorseSignals] = useState<MorseSignal[]>([]);
     const [blankDelay, setBlankDelay] = useState(1500);
     const [isConnected, setIsConnected] = useState(false);
     const [partner, setPartner] = useState<User | null>(null);
@@ -164,14 +170,29 @@ const EnhancedMorseChat = forwardRef<MorseChatRef, EnhancedMorseChatProps>(({
         }
     };
 
+    const addMorseSignal = (signal: string, type: 'sent' | 'received') => {
+        setMorseSignals(signals => {
+            const newSignals = [...signals, { signal, type, timestamp: Date.now() }];
+            // Keep only the last maxDisplayLength characters worth of signals
+            const totalLength = newSignals.reduce((acc, s) => acc + s.signal.length, 0);
+            if (totalLength > maxDisplayLength) {
+                let currentLength = 0;
+                const trimmedSignals = [];
+                for (let i = newSignals.length - 1; i >= 0; i--) {
+                    currentLength += newSignals[i].signal.length;
+                    trimmedSignals.unshift(newSignals[i]);
+                    if (currentLength >= maxDisplayLength) break;
+                }
+                return trimmedSignals;
+            }
+            return newSignals;
+        });
+    };
+
     const handleReceivedMorse = (signal: string) => {
         setIsReceiving(true);
         setTimeout(() => setIsReceiving(false), 200);
-
-        setMorseOutput(output => {
-            const newOutput = output + signal;
-            return newOutput.length > maxDisplayLength ? newOutput.slice(newOutput.length - maxDisplayLength) : newOutput;
-        });
+        addMorseSignal(signal, 'received');
     };
 
     const handleDisconnect = () => {
@@ -233,20 +254,14 @@ const EnhancedMorseChat = forwardRef<MorseChatRef, EnhancedMorseChatProps>(({
         // Send to partner via channelService
         const sent = channelService.sendMorseSignal(signal);
         if (sent) {
-            setMorseOutput(output => {
-                const newOutput = output + signal;
-                return newOutput.length > maxDisplayLength ? newOutput.slice(newOutput.length - maxDisplayLength) : newOutput;
-            });
+            addMorseSignal(signal, 'sent');
 
             // Auto-send space after delay
             wordTimeout.current = setTimeout(() => {
                 const spaceSignal = ' ';
                 const spaceSent = channelService.sendMorseSignal(spaceSignal);
                 if (spaceSent) {
-                    setMorseOutput(output => {
-                        const newOutput = output + spaceSignal;
-                        return newOutput.length > maxDisplayLength ? newOutput.slice(newOutput.length - maxDisplayLength) : newOutput;
-                    });
+                    addMorseSignal(spaceSignal, 'sent');
                 }
             }, blankDelay);
         }
@@ -258,7 +273,28 @@ const EnhancedMorseChat = forwardRef<MorseChatRef, EnhancedMorseChatProps>(({
     };
 
     const clearOutput = () => {
-        setMorseOutput('');
+        setMorseSignals([]);
+    };
+
+    // Render morse signals with colors
+    const renderMorseOutput = () => {
+        const totalLength = morseSignals.reduce((acc, signal) => acc + signal.signal.length, 0);
+        const paddingLength = Math.max(0, maxDisplayLength - totalLength);
+        const padding = '_'.repeat(paddingLength);
+
+        return (
+            <div className="inline-block" ref={scrollRef}>
+                {padding}
+                {morseSignals.map((morseSignal, index) => (
+                    <span
+                        key={`${morseSignal.timestamp}-${index}`}
+                        className={morseSignal.type === 'sent' ? 'text-yellow-400' : 'text-green-400'}
+                    >
+                        {morseSignal.signal.replace(/ /g, '_')}
+                    </span>
+                ))}
+            </div>
+        );
     };
 
     useEffect(() => {
@@ -421,9 +457,7 @@ const EnhancedMorseChat = forwardRef<MorseChatRef, EnhancedMorseChatProps>(({
             {/* Morse Display Area */}
             <div className="w-full max-w-4xl mx-auto bg-[#908573] border border-[#A29787] rounded-lg p-4 text-lg sm:text-xl font-mono text-[#1D222B] overflow-hidden">
                 <div className="w-full overflow-hidden whitespace-nowrap">
-                    <div className="inline-block" ref={scrollRef}>
-                        {morseOutput.replace(/ /g, '_').padStart(maxDisplayLength, '_')}
-                    </div>
+                    {renderMorseOutput()}
                 </div>
             </div>
             <button
@@ -432,6 +466,11 @@ const EnhancedMorseChat = forwardRef<MorseChatRef, EnhancedMorseChatProps>(({
             >
                 Clear Display
             </button>
+
+            {/* Color Legend */}
+            <div className="w-full max-w-4xl mx-auto mt-2 text-center text-sm">
+                <span className="text-yellow-400">■</span> Sent | <span className="text-green-400">■</span> Received
+            </div>
 
             {/* Instructions */}
             <div className="mt-6 text-center text-sm text-[#A29787] max-w-2xl mx-auto px-4">
